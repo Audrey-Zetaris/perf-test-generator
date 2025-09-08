@@ -1,0 +1,73 @@
+# SBT
+target/
+project/target/
+project/project/
+dist/
+lib_managed/
+src_managed/
+.history
+.cache
+.lib/
+
+# Scala
+*.class
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.bsp/
+.metals/
+.bloop/
+metals.sbt
+
+# Package files
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# But keep the bin directory and scripts
+!bin/
+!bin/*.sh
+
+# Logs
+logs/
+*.log
+log/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Spark
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Application specific
+/tmp/
+/temp/
+checkpoint/
+staging/
+
+# AWS credentials (never commit these)
+*.pem
+*.ppk
+credentials.conf
+aws-credentials.conf
+
+# Local configuration overrides
+conf/local.conf
+conf/override.conf

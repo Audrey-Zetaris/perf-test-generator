@@ -12,7 +12,7 @@ lazy val root = (project in file("."))
     // Library dependencies
     libraryDependencies ++= {
       val sparkVersion = "3.5.1"
-      val deltaVersion = "2.4.0"
+      val deltaVersion = "3.2.0"
       val hadoopVersion = "3.3.4"
       val awsVersion = "1.12.262"
 
@@ -23,7 +23,7 @@ lazy val root = (project in file("."))
         "org.apache.spark" %% "spark-streaming" % sparkVersion % "provided",
 
         // Delta Lake
-        "io.delta" %% "delta-core" % deltaVersion,
+        "io.delta" %% "delta-spark" % deltaVersion,
 
         // AWS and Hadoop for S3
         "org.apache.hadoop" % "hadoop-aws" % hadoopVersion,

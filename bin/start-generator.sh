@@ -33,7 +33,7 @@ SPARK_DRIVER_MAX_RESULT_SIZE="${SPARK_DRIVER_MAX_RESULT_SIZE:-4g}"
 
 # Adaptive Query Execution settings with defaults
 SPARK_ADAPTIVE_ENABLED="${SPARK_CONF_spark_sql_adaptive_enabled:-true}"
-SPARK_ADAPTIVE_COALESCE_PARTITIONS="${SPARK_CONF_spark_sql_adaptive_coalescePartitions_enabled:-false}"
+SPARK_ADAPTIVE_COALESCE_PARTITIONS="${SPARK_CONF_spark_sql_adaptive_coalescePartitions_enabled:-true}"
 SPARK_ADAPTIVE_SKEW_JOIN="${SPARK_CONF_spark_sql_adaptive_skewJoin_enabled:-true}"
 SPARK_ADAPTIVE_LOCAL_SHUFFLE_READER="${SPARK_CONF_spark_sql_adaptive_localShuffleReader_enabled:-true}"
 

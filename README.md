@@ -4,12 +4,13 @@ A high-performance data generator for creating large-scale Delta Lake datasets w
 
 ## Features
 
-- **Massive Scale**: Generates 20GB per 5-minute bucket with 100 part files each
+- **Massive Scale**: Generates 20GB per 5-minute bucket 
 - **Time-Series Data**: 4 days of data across 1,152 time buckets (23TB total)
 - **Hierarchical Partitioning**: Year/Month/Day/Hour/5-minute bucket structure
 - **Multiple Tables**: Web traffic, mobile traffic, user activity, and transactions
 - **Optimized Queries**: 10 pre-built BMT queries with partition filtering
 - **S3-Optimized**: Default configuration for AWS S3 with performance tuning
+- **Adaptive Partitioning**: Spark automatically optimizes partition count for performance
 
 ## Quick Start
 
@@ -59,7 +60,7 @@ The default configuration is optimized for S3 with:
 - `EXECUTOR_MEMORY`: 16GB (optimized for S3)
 - `DAYS_TO_GENERATE`: 4 days (23TB total)
 - `GB_PER_BUCKET`: 20GB per 5-minute bucket
-- `PARTITIONS_PER_BUCKET`: 100 part files per bucket
+- `PARTITIONS_PER_BUCKET`: Target partition count (actual count may vary due to Spark optimizations)
 
 ### S3 Configuration
 
@@ -192,9 +193,16 @@ Monitor progress through:
 Increase driver/executor memory in `conf/generator.conf`
 
 ### Slow Performance
-- Increase `PARTITIONS_PER_BUCKET` for better parallelism
 - Ensure sufficient cluster resources
 - Check network bandwidth for S3 writes
+- Note: Spark may automatically adjust partition count for optimal performance
+
+### Partition Count Variations
+The actual number of partition files may differ from `PARTITIONS_PER_BUCKET` due to:
+- **Spark Adaptive Query Execution (AQE)**: Automatically coalesces small partitions for better performance
+- **Delta Lake optimizations**: `optimizeWrite` and `autoCompact` create fewer, larger files
+- **S3 committer optimizations**: May merge partitions during the commit phase
+- This is expected behavior and typically improves overall performance
 
 ### S3 Write Issues
 - Verify AWS credentials

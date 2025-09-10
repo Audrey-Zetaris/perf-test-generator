@@ -31,6 +31,9 @@ lazy val root = (project in file("."))
 
         // Hadoop Client (for S3A filesystem)
         "org.apache.hadoop" % "hadoop-client" % hadoopVersion,
+        
+        // Spark Hadoop Cloud (for S3 committers)
+        "org.apache.spark" %% "spark-hadoop-cloud" % sparkVersion,
 
         // Logging
         "ch.qos.logback" % "logback-classic" % "1.4.11",

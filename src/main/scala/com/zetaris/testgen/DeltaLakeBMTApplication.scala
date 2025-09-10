@@ -317,7 +317,6 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
       .mode("append")
       .partitionBy("year", "month", "day", "hour", "minute_bucket")
       .option("mergeSchema", "true")
-      .option("maxRecordsPerFile", 200000) // ~200MB per file with 1KB records
       .option("dataChange", "true")
       .save(path)
 

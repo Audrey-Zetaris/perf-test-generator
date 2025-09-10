@@ -12,14 +12,46 @@ object DeltaLakeBMTApplication {
   case class Config(
                      basePath: String = "/tmp/delta-lake-bmt",
                      partitionInterval: Int = 5, // minutes
-                     daysToGenerate: Int = 4, // Generate 4 days of data
+                     daysToGenerate: Int = 1, // Generate 1 day of data
                      targetDataSizeGBPerBucket: Double = 20.0, // 20GB per 5-min bucket
                      partitionsPerBucket: Int = 100, // 100 part files per bucket
                      recordsPerBucket: Long = 20000000L // ~20M records for 20GB (assuming ~1KB per record)
                    )
 
+  def parseCommandLineArgs(args: Array[String]): Config = {
+    val parser = new scopt.OptionParser[Config]("perf-test-generator") {
+      head("Delta Lake Performance Test Generator", "1.0.0")
+      
+      opt[String]("base-path")
+        .action((x, c) => c.copy(basePath = x))
+        .text("Base path for Delta Lake tables")
+        
+      opt[Int]("days")
+        .action((x, c) => c.copy(daysToGenerate = x))
+        .text("Number of days of data to generate")
+        
+      opt[Double]("gb-per-bucket")
+        .action((x, c) => c.copy(targetDataSizeGBPerBucket = x))
+        .text("Target data size in GB per 5-minute bucket")
+        
+      opt[Int]("partitions-per-bucket")
+        .action((x, c) => c.copy(partitionsPerBucket = x))
+        .text("Number of partitions per bucket")
+        
+      opt[Long]("records-per-bucket")
+        .action((x, c) => c.copy(recordsPerBucket = x))
+        .text("Number of records per bucket")
+    }
+    
+    parser.parse(args, Config()) match {
+      case Some(config) => config
+      case None =>
+        sys.exit(1)
+    }
+  }
+
   def main(args: Array[String]): Unit = {
-    val config = Config()
+    val config = parseCommandLineArgs(args)
 
     val spark = SparkSession.builder()
       .appName("DeltaLake BMT Application")
@@ -28,15 +60,7 @@ object DeltaLakeBMTApplication {
       .config("spark.sql.adaptive.enabled", "true")
       .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .config("spark.sql.shuffle.partitions", "200")
-      .config("spark.default.parallelism", "200")
-      .config("spark.sql.files.maxPartitionBytes", "134217728") // 128MB
-      .config("spark.sql.files.openCostInBytes", "4194304") // 4MB
-      .config("spark.driver.memory", "8g")
-      .config("spark.executor.memory", "8g")
-      .config("spark.driver.maxResultSize", "4g")
       .config("spark.sql.execution.arrow.pyspark.enabled", "true")
-      .master("local[*]")
       .getOrCreate()
 
     val generator = new DataGenerator(spark, config)
@@ -45,9 +69,9 @@ object DeltaLakeBMTApplication {
     try {
       println("=== Starting Delta Lake BMT Data Generation ===")
 
-      // Generate fact tables for 4 days of data
-      // 4 days * 24 hours * 12 buckets per hour = 1,152 buckets
-      val bucketsPerDay = 24 * 12 // 288 buckets per day
+      // Generate fact tables for days of data
+      // 1 day * 288 buckets per day = 288 buckets (5-minute intervals)
+      val bucketsPerDay = 288 // 288 five-minute buckets per day (24 hours * 12 buckets/hour)
       val totalBuckets = config.daysToGenerate * bucketsPerDay
       
       println(s"Generating ${config.daysToGenerate} days of data (${totalBuckets} 5-minute buckets)")
@@ -108,14 +132,15 @@ object DeltaLakeBMTApplication {
   }
 }
 
-class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config) {
+class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config) extends Serializable {
   import spark.implicits._
 
-  private val random = new Random()
-  private val userIds = (1 to 1000000).map(i => s"user_$i").toArray
-  private val sessionIds = (1 to 5000000).map(_ => UUID.randomUUID().toString).toArray
-  private val deviceIds = (1 to 2000000).map(i => s"device_$i").toArray
-  private val ipAddresses = generateIPAddresses(100000)
+  // Generate IDs on-demand instead of pre-creating arrays
+  private def generateUserId(): String = s"user_${scala.util.Random.nextInt(100000) + 1}"
+  private def generateSessionId(): String = UUID.randomUUID().toString
+  private def generateDeviceId(): String = s"device_${scala.util.Random.nextInt(50000) + 1}"
+  private def generateIpAddress(): String = s"${scala.util.Random.nextInt(255)}.${scala.util.Random.nextInt(255)}.${scala.util.Random.nextInt(255)}.${scala.util.Random.nextInt(255)}"
+  
   private val countries = Array("US", "UK", "DE", "FR", "JP", "IN", "BR", "CA", "AU", "RU")
   private val cities = Array("New York", "London", "Berlin", "Paris", "Tokyo", "Mumbai", "São Paulo", "Toronto", "Sydney", "Moscow")
   private val browsers = Array("Chrome", "Firefox", "Safari", "Edge", "Opera")
@@ -129,23 +154,23 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
       val timestamp = generateTimestampInBucket(timeBucket)
       WebTrafficRecord(
         event_id = s"web_${UUID.randomUUID()}",
-        user_id = userIds(random.nextInt(userIds.length)),
-        session_id = sessionIds(random.nextInt(sessionIds.length)),
-        device_id = deviceIds(random.nextInt(deviceIds.length)),
+        user_id = generateUserId(),
+        session_id = generateSessionId(),
+        device_id = generateDeviceId(),
         timestamp = timestamp,
-        page_url = s"https://example.com/page${random.nextInt(10000)}",
-        referrer = if (random.nextDouble() > 0.3) s"https://referrer${random.nextInt(100)}.com" else null,
-        ip_address = ipAddresses(random.nextInt(ipAddresses.length)),
-        user_agent = s"${browsers(random.nextInt(browsers.length))}/1.0",
-        country = countries(random.nextInt(countries.length)),
-        city = cities(random.nextInt(cities.length)),
-        page_load_time = random.nextInt(5000) + 100,
-        bounce_rate = random.nextDouble(),
-        conversion = random.nextBoolean(),
-        revenue = if (random.nextDouble() > 0.95) random.nextDouble() * 1000 else 0.0,
-        browser = browsers(random.nextInt(browsers.length)),
-        os = osTypes(random.nextInt(osTypes.length)),
-        device_type = deviceTypes(random.nextInt(deviceTypes.length)),
+        page_url = s"https://example.com/page${scala.util.Random.nextInt(10000)}",
+        referrer = if (scala.util.Random.nextDouble() > 0.3) s"https://referrer${scala.util.Random.nextInt(100)}.com" else null,
+        ip_address = generateIpAddress(),
+        user_agent = s"${browsers(scala.util.Random.nextInt(browsers.length))}/1.0",
+        country = countries(scala.util.Random.nextInt(countries.length)),
+        city = cities(scala.util.Random.nextInt(cities.length)),
+        page_load_time = scala.util.Random.nextInt(5000) + 100,
+        bounce_rate = scala.util.Random.nextDouble(),
+        conversion = scala.util.Random.nextBoolean(),
+        revenue = if (scala.util.Random.nextDouble() > 0.95) scala.util.Random.nextDouble() * 1000 else 0.0,
+        browser = browsers(scala.util.Random.nextInt(browsers.length)),
+        os = osTypes(scala.util.Random.nextInt(osTypes.length)),
+        device_type = deviceTypes(scala.util.Random.nextInt(deviceTypes.length)),
         year = timeBucket.year,
         month = timeBucket.month,
         day = timeBucket.day,
@@ -162,9 +187,9 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
 
     val mobileTrafficDF = generateLargeDataFrame(config.recordsPerBucket, config.partitionsPerBucket) { index =>
       val timestamp = generateTimestampInBucket(timeBucket)
-      val userId = userIds(random.nextInt(userIds.length))
-      val sessionId = sessionIds(random.nextInt(sessionIds.length))
-      val deviceId = deviceIds(random.nextInt(deviceIds.length))
+      val userId = generateUserId()
+      val sessionId = generateSessionId()
+      val deviceId = generateDeviceId()
 
       MobileTrafficRecord(
         event_id = s"mobile_${UUID.randomUUID()}",
@@ -172,20 +197,20 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
         session_id = sessionId,
         device_id = deviceId,
         timestamp = timestamp,
-        app_name = s"MobileApp${random.nextInt(50)}",
-        app_version = s"${random.nextInt(5)}.${random.nextInt(10)}.${random.nextInt(10)}",
-        screen_name = s"Screen${random.nextInt(100)}",
-        action_type = Array("click", "swipe", "scroll", "tap", "long_press").apply(random.nextInt(5)),
-        ip_address = ipAddresses(random.nextInt(ipAddresses.length)),
-        country = countries(random.nextInt(countries.length)),
-        city = cities(random.nextInt(cities.length)),
-        network_type = Array("wifi", "4g", "5g", "3g").apply(random.nextInt(4)),
-        battery_level = random.nextInt(100),
-        memory_usage = random.nextInt(8192),
-        cpu_usage = random.nextDouble() * 100,
-        crash_occurred = random.nextDouble() > 0.99,
-        session_duration = random.nextInt(3600000), // milliseconds
-        data_usage_mb = random.nextDouble() * 100,
+        app_name = s"MobileApp${scala.util.Random.nextInt(50)}",
+        app_version = s"${scala.util.Random.nextInt(5)}.${scala.util.Random.nextInt(10)}.${scala.util.Random.nextInt(10)}",
+        screen_name = s"Screen${scala.util.Random.nextInt(100)}",
+        action_type = Array("click", "swipe", "scroll", "tap", "long_press").apply(scala.util.Random.nextInt(5)),
+        ip_address = generateIpAddress(),
+        country = countries(scala.util.Random.nextInt(countries.length)),
+        city = cities(scala.util.Random.nextInt(cities.length)),
+        network_type = Array("wifi", "4g", "5g", "3g").apply(scala.util.Random.nextInt(4)),
+        battery_level = scala.util.Random.nextInt(100),
+        memory_usage = scala.util.Random.nextInt(8192),
+        cpu_usage = scala.util.Random.nextDouble() * 100,
+        crash_occurred = scala.util.Random.nextDouble() > 0.99,
+        session_duration = scala.util.Random.nextInt(3600000), // milliseconds
+        data_usage_mb = scala.util.Random.nextDouble() * 100,
         year = timeBucket.year,
         month = timeBucket.month,
         day = timeBucket.day,
@@ -204,21 +229,21 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
       val timestamp = generateTimestampInBucket(timeBucket)
       UserActivityRecord(
         activity_id = s"activity_${UUID.randomUUID()}",
-        user_id = userIds(random.nextInt(userIds.length)),
-        session_id = sessionIds(random.nextInt(sessionIds.length)),
-        device_id = deviceIds(random.nextInt(deviceIds.length)),
+        user_id = generateUserId(),
+        session_id = generateSessionId(),
+        device_id = generateDeviceId(),
         timestamp = timestamp,
-        activity_type = Array("login", "logout", "purchase", "view", "search", "share", "like", "comment").apply(random.nextInt(8)),
-        duration_seconds = random.nextInt(7200),
-        ip_address = ipAddresses(random.nextInt(ipAddresses.length)),
-        country = countries(random.nextInt(countries.length)),
-        city = cities(random.nextInt(cities.length)),
-        product_id = if (random.nextDouble() > 0.5) s"product_${random.nextInt(100000)}" else null,
-        category_id = s"category_${random.nextInt(1000)}",
-        subcategory_id = s"subcategory_${random.nextInt(5000)}",
-        tags = Array.fill(random.nextInt(5) + 1)(s"tag${random.nextInt(1000)}").mkString(","),
-        score = random.nextInt(100),
-        is_premium_user = random.nextBoolean(),
+        activity_type = Array("login", "logout", "purchase", "view", "search", "share", "like", "comment").apply(scala.util.Random.nextInt(8)),
+        duration_seconds = scala.util.Random.nextInt(7200),
+        ip_address = generateIpAddress(),
+        country = countries(scala.util.Random.nextInt(countries.length)),
+        city = cities(scala.util.Random.nextInt(cities.length)),
+        product_id = if (scala.util.Random.nextDouble() > 0.5) s"product_${scala.util.Random.nextInt(100000)}" else null,
+        category_id = s"category_${scala.util.Random.nextInt(1000)}",
+        subcategory_id = s"subcategory_${scala.util.Random.nextInt(5000)}",
+        tags = Array.fill(scala.util.Random.nextInt(5) + 1)(s"tag${scala.util.Random.nextInt(1000)}").mkString(","),
+        score = scala.util.Random.nextInt(100),
+        is_premium_user = scala.util.Random.nextBoolean(),
         year = timeBucket.year,
         month = timeBucket.month,
         day = timeBucket.day,
@@ -237,22 +262,22 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
       val timestamp = generateTimestampInBucket(timeBucket)
       TransactionRecord(
         transaction_id = s"txn_${UUID.randomUUID()}",
-        user_id = userIds(random.nextInt(userIds.length)),
-        session_id = sessionIds(random.nextInt(sessionIds.length)),
-        device_id = deviceIds(random.nextInt(deviceIds.length)),
+        user_id = generateUserId(),
+        session_id = generateSessionId(),
+        device_id = generateDeviceId(),
         timestamp = timestamp,
-        amount = random.nextDouble() * 2000 + 10, // $10 - $2010
-        currency = Array("USD", "EUR", "GBP", "JPY", "INR").apply(random.nextInt(5)),
-        payment_method = Array("credit_card", "debit_card", "paypal", "apple_pay", "google_pay").apply(random.nextInt(5)),
-        merchant_id = s"merchant_${random.nextInt(10000)}",
-        product_ids = Array.fill(random.nextInt(5) + 1)(s"product_${random.nextInt(100000)}").mkString(","),
-        ip_address = ipAddresses(random.nextInt(ipAddresses.length)),
-        country = countries(random.nextInt(countries.length)),
-        city = cities(random.nextInt(cities.length)),
-        is_fraud = random.nextDouble() > 0.98,
-        risk_score = random.nextInt(100),
-        processing_time_ms = random.nextInt(5000) + 100,
-        status = Array("completed", "pending", "failed", "cancelled").apply(random.nextInt(4)),
+        amount = scala.util.Random.nextDouble() * 2000 + 10, // $10 - $2010
+        currency = Array("USD", "EUR", "GBP", "JPY", "INR").apply(scala.util.Random.nextInt(5)),
+        payment_method = Array("credit_card", "debit_card", "paypal", "apple_pay", "google_pay").apply(scala.util.Random.nextInt(5)),
+        merchant_id = s"merchant_${scala.util.Random.nextInt(10000)}",
+        product_ids = Array.fill(scala.util.Random.nextInt(5) + 1)(s"product_${scala.util.Random.nextInt(100000)}").mkString(","),
+        ip_address = generateIpAddress(),
+        country = countries(scala.util.Random.nextInt(countries.length)),
+        city = cities(scala.util.Random.nextInt(cities.length)),
+        is_fraud = scala.util.Random.nextDouble() > 0.98,
+        risk_score = scala.util.Random.nextInt(100),
+        processing_time_ms = scala.util.Random.nextInt(5000) + 100,
+        status = Array("completed", "pending", "failed", "cancelled").apply(scala.util.Random.nextInt(4)),
         year = timeBucket.year,
         month = timeBucket.month,
         day = timeBucket.day,
@@ -274,15 +299,10 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
 
   private def generateTimestampInBucket(bucket: DeltaLakeBMTApplication.TimeBucket): Long = {
     val bucketStart = LocalDateTime.of(bucket.year, bucket.month, bucket.day, bucket.hour, bucket.minute_bucket, 0)
-    val randomOffset = random.nextInt(5 * 60) // Random seconds within 5 minutes
+    val randomOffset = scala.util.Random.nextInt(5 * 60) // Random seconds within 5 minutes
     bucketStart.plusSeconds(randomOffset).toEpochSecond(ZoneOffset.UTC) * 1000
   }
 
-  private def generateIPAddresses(count: Int): Array[String] = {
-    (1 to count).map { _ =>
-      s"${random.nextInt(255)}.${random.nextInt(255)}.${random.nextInt(255)}.${random.nextInt(255)}"
-    }.toArray
-  }
 
   private def writeToDeltalake(df: DataFrame, tableName: String, bucket: String): Unit = {
     val path = s"${config.basePath}/$tableName"
@@ -298,6 +318,7 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
       .partitionBy("year", "month", "day", "hour", "minute_bucket")
       .option("mergeSchema", "true")
       .option("maxRecordsPerFile", 200000) // ~200MB per file with 1KB records
+      .option("dataChange", "true")
       .save(path)
 
     println(f"  ✓ Written $recordCount%,d records (~$estimatedSizeGB%.2fGB) to $tableName")

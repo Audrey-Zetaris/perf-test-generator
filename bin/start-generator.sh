@@ -24,9 +24,16 @@ DRIVER_MAX_RESULT_SIZE="${DRIVER_MAX_RESULT_SIZE:-4g}"
 SPARK_SHUFFLE_PARTITIONS="${SPARK_SHUFFLE_PARTITIONS:-200}"
 SPARK_DEFAULT_PARALLELISM="${SPARK_DEFAULT_PARALLELISM:-200}"
 
+# Additional Spark configurations (new)
+SPARK_MAX_PARTITION_BYTES="${SPARK_MAX_PARTITION_BYTES:-134217728}"  # 128MB
+SPARK_OPEN_COST_IN_BYTES="${SPARK_OPEN_COST_IN_BYTES:-4194304}"     # 4MB
+SPARK_DRIVER_MEMORY="${SPARK_DRIVER_MEMORY:-8g}"
+SPARK_EXECUTOR_MEMORY="${SPARK_EXECUTOR_MEMORY:-8g}"
+SPARK_DRIVER_MAX_RESULT_SIZE="${SPARK_DRIVER_MAX_RESULT_SIZE:-4g}"
+
 # Delta Lake specific configurations
 DELTA_BASE_PATH="${DELTA_BASE_PATH:-/tmp/delta-lake-bmt}"
-DAYS_TO_GENERATE="${DAYS_TO_GENERATE:-4}"
+DAYS_TO_GENERATE="${DAYS_TO_GENERATE:-1}"
 GB_PER_BUCKET="${GB_PER_BUCKET:-20}"
 PARTITIONS_PER_BUCKET="${PARTITIONS_PER_BUCKET:-100}"
 RECORDS_PER_BUCKET="${RECORDS_PER_BUCKET:-20000000}"
@@ -118,8 +125,8 @@ SPARK_SUBMIT_CMD="spark-submit \
     --conf spark.sql.shuffle.partitions=$SPARK_SHUFFLE_PARTITIONS \
     --conf spark.default.parallelism=$SPARK_DEFAULT_PARALLELISM \
     --conf spark.driver.maxResultSize=$DRIVER_MAX_RESULT_SIZE \
-    --conf spark.sql.files.maxPartitionBytes=134217728 \
-    --conf spark.sql.files.openCostInBytes=4194304"
+    --conf spark.sql.files.maxPartitionBytes=$SPARK_MAX_PARTITION_BYTES \
+    --conf spark.sql.files.openCostInBytes=$SPARK_OPEN_COST_IN_BYTES"
 
 # Add AWS configurations if provided
 if [ -n "$S3_BUCKET" ]; then

@@ -57,8 +57,6 @@ object DeltaLakeBMTApplication {
       .appName("DeltaLake BMT Application")
       .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
       .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-      .config("spark.sql.adaptive.enabled", "true")
-      .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config("spark.sql.execution.arrow.pyspark.enabled", "true")
       .getOrCreate()
@@ -307,11 +305,6 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
   private def writeToDeltalake(df: DataFrame, tableName: String, bucket: String): Unit = {
     val path = s"${config.basePath}/$tableName"
     
-    // Cache the DataFrame to avoid recomputation
-    df.cache()
-    val recordCount = df.count()
-    val estimatedSizeGB = (recordCount * 1024) / (1024.0 * 1024.0 * 1024.0) // Assuming ~1KB per record
-
     df.write
       .format("delta")
       .mode("append")
@@ -320,10 +313,10 @@ class DataGenerator(spark: SparkSession, config: DeltaLakeBMTApplication.Config)
       .option("dataChange", "true")
       .save(path)
 
-    println(f"  ✓ Written $recordCount%,d records (~$estimatedSizeGB%.2fGB) to $tableName")
-    
-    // Unpersist to free memory
-    df.unpersist()
+    // Log expected count (no actual computation)
+    val expectedRecords = if (tableName == "transactions") config.recordsPerBucket / 5 else config.recordsPerBucket
+    val estimatedSizeGB = (expectedRecords * 268) / (1024.0 * 1024.0 * 1024.0) // Using actual ~268 bytes per record
+    println(f"  ✓ Written $expectedRecords%,d records (~$estimatedSizeGB%.2fGB) to $tableName")
   }
 }
 

@@ -31,6 +31,12 @@ SPARK_DRIVER_MEMORY="${SPARK_DRIVER_MEMORY:-8g}"
 SPARK_EXECUTOR_MEMORY="${SPARK_EXECUTOR_MEMORY:-8g}"
 SPARK_DRIVER_MAX_RESULT_SIZE="${SPARK_DRIVER_MAX_RESULT_SIZE:-4g}"
 
+# Adaptive Query Execution settings with defaults
+SPARK_ADAPTIVE_ENABLED="${SPARK_CONF_spark_sql_adaptive_enabled:-true}"
+SPARK_ADAPTIVE_COALESCE_PARTITIONS="${SPARK_CONF_spark_sql_adaptive_coalescePartitions_enabled:-false}"
+SPARK_ADAPTIVE_SKEW_JOIN="${SPARK_CONF_spark_sql_adaptive_skewJoin_enabled:-true}"
+SPARK_ADAPTIVE_LOCAL_SHUFFLE_READER="${SPARK_CONF_spark_sql_adaptive_localShuffleReader_enabled:-true}"
+
 # Delta Lake specific configurations
 DELTA_BASE_PATH="${DELTA_BASE_PATH:-/tmp/delta-lake-bmt}"
 DAYS_TO_GENERATE="${DAYS_TO_GENERATE:-1}"
@@ -119,8 +125,10 @@ SPARK_SUBMIT_CMD="spark-submit \
     --executor-cores $EXECUTOR_CORES \
     --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
     --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
-    --conf spark.sql.adaptive.enabled=true \
-    --conf spark.sql.adaptive.coalescePartitions.enabled=true \
+    --conf spark.sql.adaptive.enabled=$SPARK_ADAPTIVE_ENABLED \
+    --conf spark.sql.adaptive.coalescePartitions.enabled=$SPARK_ADAPTIVE_COALESCE_PARTITIONS \
+    --conf spark.sql.adaptive.skewJoin.enabled=$SPARK_ADAPTIVE_SKEW_JOIN \
+    --conf spark.sql.adaptive.localShuffleReader.enabled=$SPARK_ADAPTIVE_LOCAL_SHUFFLE_READER \
     --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
     --conf spark.sql.shuffle.partitions=$SPARK_SHUFFLE_PARTITIONS \
     --conf spark.default.parallelism=$SPARK_DEFAULT_PARALLELISM \

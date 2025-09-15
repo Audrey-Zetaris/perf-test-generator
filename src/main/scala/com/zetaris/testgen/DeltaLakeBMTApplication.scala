@@ -3,7 +3,7 @@ package com.zetaris.testgen
 import org.apache.spark.sql.{DataFrame, Encoder, SparkSession}
 
 import java.time.format.DateTimeFormatter
-import java.time.{LocalDateTime, ZoneOffset}
+import java.time.{LocalDate, LocalDateTime, ZoneOffset}
 import java.util.UUID
 import scala.util.Random
 
@@ -13,6 +13,7 @@ object DeltaLakeBMTApplication {
                      basePath: String = "/tmp/delta-lake-bmt",
                      partitionInterval: Int = 5, // minutes
                      daysToGenerate: Int = 1, // Generate 1 day of data
+                     startDate: String = "", // Start date in format "yyyy-MM-dd", empty = use current time
                      targetDataSizeGBPerBucket: Double = 20.0, // 20GB per 5-min bucket
                      partitionsPerBucket: Int = 100, // 100 part files per bucket
                      recordsPerBucket: Long = 20000000L // ~20M records for 20GB (assuming ~1KB per record)
@@ -29,6 +30,10 @@ object DeltaLakeBMTApplication {
       opt[Int]("days")
         .action((x, c) => c.copy(daysToGenerate = x))
         .text("Number of days of data to generate")
+        
+      opt[String]("start-date")
+        .action((x, c) => c.copy(startDate = x))
+        .text("Start date in format yyyy-MM-dd (default: current time)")
         
       opt[Double]("gb-per-bucket")
         .action((x, c) => c.copy(targetDataSizeGBPerBucket = x))
@@ -76,7 +81,7 @@ object DeltaLakeBMTApplication {
       println(s"Target: ${config.targetDataSizeGBPerBucket}GB per bucket with ${config.partitionsPerBucket} part files")
       println(s"Total data size: ${totalBuckets * config.targetDataSizeGBPerBucket}GB")
       
-      val buckets = generateTimeBuckets(totalBuckets)
+      val buckets = generateTimeBuckets(totalBuckets, config.startDate)
 
       buckets.zipWithIndex.foreach { case (bucket, index) =>
         println(s"\n[${index + 1}/${totalBuckets}] Generating data for bucket: ${bucket.timestamp_str}")
@@ -112,10 +117,21 @@ object DeltaLakeBMTApplication {
     timestamp_str: String
   )
 
-  def generateTimeBuckets(count: Int): List[TimeBucket] = {
-    val now = LocalDateTime.now()
+  def generateTimeBuckets(count: Int, startDateStr: String = ""): List[TimeBucket] = {
+    val startTime = if (startDateStr.nonEmpty) {
+      try {
+        LocalDate.parse(startDateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd")).atStartOfDay()
+      } catch {
+        case _: Exception =>
+          println(s"Warning: Invalid start date format '$startDateStr', using current time")
+          LocalDateTime.now()
+      }
+    } else {
+      LocalDateTime.now()
+    }
+    
     (0 until count).map { i =>
-      val bucketTime = now.minusMinutes(i * 5)
+      val bucketTime = startTime.plusMinutes(i * 5)  // Generate forward from start date
       val minuteBucket = (bucketTime.getMinute / 5) * 5  // Round down to nearest 5-minute interval
       
       TimeBucket(

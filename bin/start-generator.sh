@@ -40,6 +40,7 @@ SPARK_ADAPTIVE_LOCAL_SHUFFLE_READER="${SPARK_CONF_spark_sql_adaptive_localShuffl
 # Delta Lake specific configurations
 DELTA_BASE_PATH="${DELTA_BASE_PATH:-/tmp/delta-lake-bmt}"
 DAYS_TO_GENERATE="${DAYS_TO_GENERATE:-1}"
+START_DATE="${START_DATE:-}"
 GB_PER_BUCKET="${GB_PER_BUCKET:-20}"
 PARTITIONS_PER_BUCKET="${PARTITIONS_PER_BUCKET:-100}"
 RECORDS_PER_BUCKET="${RECORDS_PER_BUCKET:-20000000}"
@@ -111,6 +112,11 @@ echo "  Executor Instances: $EXECUTOR_INSTANCES"
 echo "  Executor Cores: $EXECUTOR_CORES"
 echo "  Data Path: $DELTA_BASE_PATH"
 echo "  Days to Generate: $DAYS_TO_GENERATE"
+if [ -n "$START_DATE" ]; then
+    echo "  Start Date: $START_DATE"
+else
+    echo "  Start Date: Current time"
+fi
 echo "  GB per Bucket: $GB_PER_BUCKET"
 echo "  Partitions per Bucket: $PARTITIONS_PER_BUCKET"
 echo "  Log File: $LOG_FILE"
@@ -232,6 +238,11 @@ SPARK_SUBMIT_CMD="$SPARK_SUBMIT_CMD \
     --gb-per-bucket $GB_PER_BUCKET \
     --partitions-per-bucket $PARTITIONS_PER_BUCKET \
     --records-per-bucket $RECORDS_PER_BUCKET"
+
+# Add start date if provided
+if [ -n "$START_DATE" ]; then
+    SPARK_SUBMIT_CMD="$SPARK_SUBMIT_CMD --start-date $START_DATE"
+fi
 
 # Add YARN/cluster specific configurations if not running locally
 if [ "$SPARK_MASTER" != "local[*]" ] && [[ "$SPARK_MASTER" == yarn* ]]; then
